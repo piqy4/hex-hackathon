@@ -1,12 +1,13 @@
 <resources>
-    <string name="app_name">My Application</string>
+    <string name="app_name">Нейро-стенографист</string>
 
     <string name="main_pick_file">Выбрать аудиофайл</string>
     <string name="main_no_file">Файл не выбран</string>
     <string name="main_process">Обработать</string>
     <string name="main_no_speech">Речь не найдена</string>
-    <string name="main_summary">Длительность: %1$s\nГоворящих: %2$d, реплик: %3$d\nДекодирование %4$d мс, диаризация %5$d мс, распознавание %6$d мс (RTF %7$s)</string>
+    <string name="main_summary">Длительность: %1$s\nГоворящих: %2$d, реплик: %3$d\nДекодирование %4$d мс, диаризация %5$d мс, распознавание %6$d мс, LLM %7$d мс\nПолный RTF: %8$s</string>
 
+    <string name="stage_polishing">Восстановление пунктуации…</string>
     <string name="stage_models">Подготовка моделей…</string>
     <string name="stage_decoding">Декодирование аудио…</string>
     <string name="stage_diarization">Поиск говорящих…</string>

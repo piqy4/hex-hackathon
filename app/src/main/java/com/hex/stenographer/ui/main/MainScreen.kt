@@ -13,6 +13,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -30,9 +31,23 @@ fun MainScreen(
     state: MainUiState,
     onPickFile: () -> Unit,
     onProcess: () -> Unit,
+    onExport: () -> Unit,
+    onEdit: (Int, String) -> Unit,
+    onReprocess: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val busy = state is MainUiState.Processing
+    val busy = state is MainUiState.Processing || (state is MainUiState.Done && state.reprocessing != null)
+    val context = LocalContext.current
+    val player = androidx.compose.runtime.remember(context) { FragmentPlayer(context) }
+    val owner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    androidx.compose.runtime.DisposableEffect(player, owner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP) player.stop()
+        }
+        owner.lifecycle.addObserver(observer)
+        onDispose { owner.lifecycle.removeObserver(observer); player.stop() }
+    }
+    androidx.compose.runtime.LaunchedEffect(state.file?.uri, busy) { player.stop() }
     LazyColumn(
         modifier = modifier.padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -57,14 +72,32 @@ fun MainScreen(
                         stringResource(state.error.messageRes()),
                         color = MaterialTheme.colorScheme.error,
                     )
-                    is MainUiState.Done -> Summary(state.result)
+                    is MainUiState.Done -> {
+                        Summary(state.result)
+                        state.fragmentError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                        if (state.reprocessing != null) Text("Повторное распознавание реплики…")
+                        OutlinedButton(onClick = onExport, modifier = Modifier.fillMaxWidth()) {
+                            Text("Экспорт JSON")
+                        }
+                    }
                     else -> Unit
                 }
             }
         }
         if (state is MainUiState.Done) {
-            itemsIndexed(state.result.utterances, key = { i, _ -> i }) { _, utterance ->
+            itemsIndexed(state.result.utterances, key = { i, _ -> i }) { index, utterance ->
                 UtteranceRow(utterance)
+                if (!busy) {
+                    EditUtterance(utterance.text) { onEdit(index, it) }
+                    TextButton(onClick = { onReprocess(index) }) { Text("Распознать заново") }
+                    TextButton(onClick = {
+                        player.play(state.file.uri, utterance.startMs, utterance.endMs) {
+                            android.widget.Toast.makeText(context, "Не удалось воспроизвести аудио",
+                                android.widget.Toast.LENGTH_LONG).show()
+                        }
+                    }) { Text("Прослушать") }
+                    TextButton(onClick = { player.stop() }) { Text("Стоп") }
+                }
                 HorizontalDivider()
             }
         }
@@ -110,6 +143,7 @@ private fun Summary(result: ProcessingResult) {
             result.stageTimesMs[Stage.Decoding] ?: 0L,
             result.stageTimesMs[Stage.Diarization] ?: 0L,
             result.stageTimesMs[Stage.Recognition] ?: 0L,
+            result.stageTimesMs[Stage.Polishing] ?: 0L,
             String.format(Locale.US, "%.3f", result.rtf),
         ),
         style = MaterialTheme.typography.bodyMedium,
@@ -136,6 +170,7 @@ private fun Stage.labelRes(): Int = when (this) {
     Stage.Decoding -> R.string.stage_decoding
     Stage.Diarization -> R.string.stage_diarization
     Stage.Recognition -> R.string.stage_recognition
+    Stage.Polishing -> R.string.stage_polishing
 }
 
 private fun ProcessingError.messageRes(): Int = when (this) {

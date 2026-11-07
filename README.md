@@ -1,5 +1,22 @@
 # hex-hackathon
-Offline Android transcriber with speaker diarization and timestamps. Whisper + pyannote via sherpa-onnx, punctuation restored by an on-device LLM (Qwen2.5 + llama.cpp). JSON export, no network required. Nuclear IT Hack 2026.
+Офлайн Android-стенографист: GigaAM v3 + pyannote через sherpa-onnx, пунктуация через
+Qwen2.5-0.5B-Instruct Q4_K_M и llama.cpp. JSON через системный диалог, редактирование текста
+и повторное распознавание отдельной реплики.
+
+LLM работает после освобождения нативных моделей ASR/диаризации. Ответ принимается только
+при сохранении последовательности слов и ID; ошибки и исчерпание бюджета оставляют исходный
+текст. Общий RTF включает этап LLM. При повторной обработке реплики декодируется весь файл,
+но ASR получает только выбранный интервал; метрики первоначального прогона не пересчитываются.
+
+Для JNI нужны NDK 28.2.13676358, CMake 3.22.1; llama.cpp закреплён на
+cf659f240b232e15700b1721bbb43c1d973c52e9. При отсутствии соседнего checkout CMake получает
+эту версию через FetchContent. Модель Qwen добавляет 491400032 байта к весам APK,
+источник — Qwen/Qwen2.5-0.5B-Instruct-GGUF, ревизия 9217f5db79a29953eb74d5343926648285ec7e67,
+лицензия Apache-2.0; llama.cpp — MIT. SHA-256 в models/SHA256SUMS.
+Для повторного использования локальных весов: `-PmodelCacheDir=<папка>`; хеш проверяется и в этом режиме.
+
+Приведённые ниже исторические метрики ASR/диаризации **не включают LLM**.
+Актуальные границы проверки интеграции — [INTEGRATION_STATUS.md](INTEGRATION_STATUS.md).
 
 ## Сборка
 
@@ -7,14 +24,16 @@ Offline Android transcriber with speaker diarization and timestamps. Whisper + p
 
 ```sh
 ./gradlew :app:assembleDebug        # arm64-v8a + x86_64 (эмулятор)
-./gradlew :app:assembleRelease      # только arm64-v8a, ASR = GigaAM v3 CTC
+./gradlew :app:assembleRelease -PdemoSigning=true  # устанавливаемый demo APK, arm64-v8a
 ./gradlew :app:assembleRelease -PasrModel=zipformer-ru   # другая модель ASR в APK
 ./gradlew :app:testDebugUnitTest    # JVM-тесты: WAV, ресемплер, таймлайн, нарезка, WER, метрики
 ./gradlew :app:connectedDebugAndroidTest  # диаризация и оценка на устройстве/эмуляторе
 ```
 
 `-PasrModel`: `gigaam-v3-ctc` (по умолчанию), `gigaam-v3-ctc-punct`, `zipformer-ru`, `whisper-base`,
-`whisper-tiny`. Релизный APK с GigaAM — 273 МБ.
+`whisper-tiny`. Прежний APK без LLM занимал 273 МБ; текущий включает дополнительно около 491 МБ весов Qwen.
+`demoSigning` использует debug-ключ компьютера для демонстрации; без параметра release не подписан.
+Порядок сдачи — [SUBMISSION.md](SUBMISSION.md), результаты телефона и JSON — [evidence/README.md](evidence/README.md).
 
 Большие бинарники в Git не хранятся. При первой сборке Gradle скачивает их и сверяет SHA-256,
 дальше сборка работает офлайн:
