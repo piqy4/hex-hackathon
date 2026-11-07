@@ -25,6 +25,10 @@ class MainActivity : ComponentActivity() {
             MyApplicationTheme {
                 val viewModel: MainViewModel = viewModel(factory = MainViewModel.Factory)
                 val state by viewModel.state.collectAsStateWithLifecycle()
+                val notice by viewModel.notice.collectAsStateWithLifecycle()
+                val exporter = rememberLauncherForActivityResult(
+                    ActivityResultContracts.CreateDocument("application/json"), viewModel::export,
+                )
                 val picker = rememberLauncherForActivityResult(
                     ActivityResultContracts.OpenDocument(),
                     viewModel::onFileSelected,
@@ -34,6 +38,10 @@ class MainActivity : ComponentActivity() {
                         state = state,
                         onPickFile = { picker.launch(AUDIO_MIME_TYPES) },
                         onProcess = viewModel::process,
+                        onExport = { if (viewModel.prepareExport()) exporter.launch("transcript.json") },
+                        onEdit = viewModel::editText,
+                        onReprocess = viewModel::reprocess,
+                        notice = notice,
                         modifier = Modifier.padding(innerPadding),
                     )
                 }

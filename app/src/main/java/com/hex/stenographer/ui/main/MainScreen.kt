@@ -15,8 +15,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -29,10 +34,21 @@ import java.util.Locale
 fun MainScreen(
     state: MainUiState,
     onPickFile: () -> Unit,
-    onProcess: () -> Unit,
+    onProcess: (Boolean) -> Unit,
+    onExport: () -> Unit,
+    onEdit: (Int, String, String) -> Unit,
+    onReprocess: (Int) -> Unit,
     modifier: Modifier = Modifier,
+    notice: String? = null,
 ) {
+    var rumble by remember { mutableStateOf(false) }
     val busy = state is MainUiState.Processing
+    val view = LocalView.current
+    DisposableEffect(view, busy) {
+        val previous = view.keepScreenOn
+        view.keepScreenOn = busy
+        onDispose { view.keepScreenOn = previous }
+    }
     LazyColumn(
         modifier = modifier.padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -47,7 +63,8 @@ fun MainScreen(
                     Text(stringResource(R.string.main_no_file), style = MaterialTheme.typography.bodyMedium)
                 } else {
                     FileInfo(file)
-                    Button(onClick = onProcess, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+                    Row { androidx.compose.material3.Checkbox(checked = rumble, onCheckedChange = { rumble = it }, enabled = !busy); Text("Фильтр низкочастотного гула") }
+                    Button(onClick = { onProcess(rumble) }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
                         Text(stringResource(R.string.main_process))
                     }
                 }
@@ -57,14 +74,37 @@ fun MainScreen(
                         stringResource(state.error.messageRes()),
                         color = MaterialTheme.colorScheme.error,
                     )
-                    is MainUiState.Done -> Summary(state.result)
+                    is MainUiState.Done -> {
+                        Summary(state.result)
+                        Button(onClick = onExport) { Text("Экспорт JSON") }
+                        state.result.warning?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                        Text("При шуме и одновременной речи возможны ошибки говорящих. Проверьте результат.")
+                    }
                     else -> Unit
                 }
             }
         }
+        notice?.let { item { Text(it) } }
         if (state is MainUiState.Done) {
-            itemsIndexed(state.result.utterances, key = { i, _ -> i }) { _, utterance ->
+            itemsIndexed(state.result.utterances, key = { i, _ -> i }) { index, utterance ->
                 UtteranceRow(utterance)
+                var editing by remember { mutableStateOf(false) }
+                var draft by remember(utterance.text) { mutableStateOf(utterance.text) }
+                var speaker by remember(utterance.speakerId) { mutableStateOf(utterance.speakerId) }
+                TextButton(onClick = { editing = true }) { Text("Редактировать") }
+                TextButton(onClick = { onReprocess(index) }) { Text("Распознать фрагмент заново") }
+                if (editing) AlertDialog(
+                    onDismissRequest = { editing = false },
+                    title = { Text("Текст реплики") },
+                    text = { Column {
+                        OutlinedTextField(value = speaker, onValueChange = { speaker = it }, label = { Text("Говорящий (speaker_1, speaker_2…)") })
+                        OutlinedTextField(value = draft, onValueChange = { draft = it }, label = { Text("Текст") })
+                    } },
+                    confirmButton = { TextButton(enabled = draft.isNotBlank() && speaker.matches(Regex("speaker_[1-9][0-9]*")), onClick = {
+                        onEdit(index, draft, speaker); editing = false
+                    }) { Text("Сохранить") } },
+                    dismissButton = { TextButton(onClick = { editing = false }) { Text("Отмена") } },
+                )
                 HorizontalDivider()
             }
         }
@@ -114,6 +154,7 @@ private fun Summary(result: ProcessingResult) {
         ),
         style = MaterialTheme.typography.bodyMedium,
     )
+    Text("LLM: ${result.stageTimesMs[Stage.Polishing] ?: 0} мс, принятых правок: ${result.polishEvents.sumOf { it.changed }}")
     if (result.utterances.isEmpty()) Text(stringResource(R.string.main_no_speech))
 }
 
@@ -136,6 +177,7 @@ private fun Stage.labelRes(): Int = when (this) {
     Stage.Decoding -> R.string.stage_decoding
     Stage.Diarization -> R.string.stage_diarization
     Stage.Recognition -> R.string.stage_recognition
+    Stage.Polishing -> R.string.stage_polishing
 }
 
 private fun ProcessingError.messageRes(): Int = when (this) {

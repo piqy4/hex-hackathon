@@ -43,28 +43,41 @@ class SpeakerTimelineTest {
     }
 
     @Test
-    fun `overlap goes to the longer segment and the shorter keeps the rest`() {
+    fun `crossing turns split the ambiguous transition at its midpoint`() {
         // B (3 s) overlaps the end of A (2 s): the shared second goes to B.
         val spans = build(seg(0.0, 2.0, 0), seg(1.0, 4.0, 1))
-        assertEquals(listOf(span(1, 0.0, 1.0), span(2, 1.0, 4.0)), spans)
+        assertEquals(listOf(span(1, 0.0, 1.5), span(2, 1.5, 4.0)), spans)
     }
 
     @Test
-    fun `interjection inside a longer turn is absorbed by it`() {
+    fun `interjection survives and enclosing speaker resumes afterwards`() {
         val spans = build(seg(0.0, 10.0, 0), seg(4.0, 5.0, 1))
+        assertEquals(listOf(span(1, 0.0, 4.0), span(2, 4.0, 5.0), span(1, 5.0, 10.0)), spans)
+    }
+
+    @Test
+    fun `reported repeated agreement keeps newly detected speaker onset`() {
+        val spans = build(seg(4.756, 11.472, 1), seg(10.38, 12.974, 0))
+        assertEquals(listOf(span(1, 4.756, 10.926), span(2, 10.926, 12.974)), spans)
+    }
+
+    @Test
+    fun `original longest segment policy remains available as baseline`() {
+        val spans = build(seg(0.0, 10.0, 0), seg(4.0, 5.0, 1),
+            config = TimelineConfig(overlapPolicy = OverlapPolicy.LongestSegment))
         assertEquals(listOf(span(1, 0.0, 10.0)), spans)
     }
 
     @Test
     fun `segment overlapped on both sides keeps only its middle`() {
         val spans = build(seg(3.0, 5.0, 0), seg(0.0, 3.5, 1), seg(4.5, 9.0, 1))
-        assertEquals(listOf(span(1, 0.0, 3.5), span(2, 3.5, 4.5), span(1, 4.5, 9.0)), spans)
+        assertEquals(listOf(span(1, 0.0, 3.25), span(2, 3.25, 4.75), span(1, 4.75, 9.0)), spans)
     }
 
     @Test
-    fun `equal duration overlap goes to the earlier start`() {
+    fun `equal duration overlap goes to the new turn`() {
         val spans = build(seg(1.0, 3.0, 1), seg(0.0, 2.0, 0))
-        assertEquals(listOf(span(1, 0.0, 2.0), span(2, 2.0, 3.0)), spans)
+        assertEquals(listOf(span(1, 0.0, 1.5), span(2, 1.5, 3.0)), spans)
     }
 
     @Test

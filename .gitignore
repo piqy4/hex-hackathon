@@ -40,5 +40,9 @@ keystore.properties
 *.apk
 *.aab
 /app/release/
+!/models/manifest.json
+/app/build/
+**/__pycache__/
 # ===== Нативные библиотеки (скачиваются Gradle, см. app/build.gradle.kts) =====
 /app/libs/
+/device-results/

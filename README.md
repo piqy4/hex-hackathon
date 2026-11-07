@@ -1,6 +1,10 @@
 # hex-hackathon
-Offline Android transcriber with speaker diarization and timestamps. Whisper + pyannote via sherpa-onnx, punctuation restored by an on-device LLM (Qwen2.5 + llama.cpp). JSON export, no network required. Nuclear IT Hack 2026.
+Offline Android transcriber with speaker diarization and timestamps. GigaAM + pyannote via sherpa-onnx, punctuation restored by an on-device LLM (Qwen2.5 + llama.cpp). JSON export, no network required. Nuclear IT Hack 2026.
 
+## Local LLM
+LLM, экспорт JSON, редактирование и повторная обработка фрагментов подключены к общему приложению.
+См. [инструкцию роли №3 и ограничения](docs/ROLE3.md), [проверку на телефоне](docs/VALIDATION.md) и [детали модуля](docs/INTEGRATION.md).
+Перед сборкой выполнить `tools/setup_llama.ps1` и `python tools/prepare_model.py --assets`.
 ## Сборка
 
 Нужны Android Studio (JBR 21), Android SDK 37, сеть при первой сборке.
@@ -14,7 +18,7 @@ Offline Android transcriber with speaker diarization and timestamps. Whisper + p
 ```
 
 `-PasrModel`: `gigaam-v3-ctc` (по умолчанию), `gigaam-v3-ctc-punct`, `zipformer-ru`, `whisper-base`,
-`whisper-tiny`. Релизный APK с GigaAM — 273 МБ.
+`whisper-tiny`. APK с GigaAM и локальной Qwen — около 758 МиБ; прежние 273 МБ относились к сборке без LLM.
 
 Большие бинарники в Git не хранятся. При первой сборке Gradle скачивает их и сверяет SHA-256,
 дальше сборка работает офлайн:
@@ -52,8 +56,9 @@ adb push models/zipformer-ru-* /sdcard/Android/data/com.hex.stenographer/files/m
    Пиковая нормализация не годилась: один щелчок рядом с тихой речью её отключал.
 2. **Диаризация.** sherpa-onnx: pyannote segmentation 3.0 int8 + 3D-Speaker ERes2Net (VoxCeleb),
    автоматическое число кластеров, порог 0.85. Постобработка (`SpeakerTimeline`):
-   - при наложении голосов остаётся один активный говорящий — более длинный исходный интервал,
-     при равенстве — более ранний; **второй голос в зоне перекрытия теряется**;
+   - переходное перекрытие делится по середине, вложенная короткая реплика получает свой интервал;
+     короткие перебивания сохраняются, предыдущий голос может продолжить после них;
+     **одновременное распознавание обоих голосов в смеси не реализовано**;
    - соседние интервалы одного голоса склеиваются через паузу ≤ 300 мс;
    - фрагменты < 100 мс отбрасываются;
    - ID `speaker_1…N` по первому появлению, стабильны в пределах записи.
@@ -108,6 +113,9 @@ adb shell cat /sdcard/Android/data/com.hex.stenographer/files/eval/report.tsv   
 `suite` = `clips` | `dialogs` | `all`.
 
 ### Результаты (эмулятор x86_64, 4 потока)
+
+Исторические замеры этапов №1–2 до интеграции LLM и исправления обработки перекрытий.
+Они не являются сквозными метриками текущей сборки на телефоне.
 
 ASR на 73 клипах целиком, без диаризации (293,8 с аудио, 581 слово):
 
