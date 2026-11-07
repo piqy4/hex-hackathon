@@ -1,3 +1,16 @@
 <resources>
     <string name="app_name">My Application</string>
+
+    <string name="import_pick_file">Выбрать аудиофайл</string>
+    <string name="import_no_file">Файл не выбран</string>
+    <string name="import_decode">Декодировать</string>
+    <string name="import_decoding">Декодирование…</string>
+    <string name="import_result">Длительность: %1$s\nЧастота: %2$d Гц, моно\nСэмплов: %3$d\nВремя декодирования: %4$d мс (RTF %5$s)</string>
+
+    <string name="import_error_unreadable">Не удалось открыть файл. Возможно, он удалён или доступ отозван.</string>
+    <string name="import_error_unsupported">Формат файла не поддерживается на этом устройстве.</string>
+    <string name="import_error_corrupted">Файл повреждён или не содержит аудио.</string>
+    <string name="import_error_too_long">Запись слишком длинная.</string>
+    <string name="import_error_memory">Недостаточно памяти для обработки записи.</string>
+    <string name="import_error_unknown">Неизвестная ошибка при декодировании.</string>
 </resources>
