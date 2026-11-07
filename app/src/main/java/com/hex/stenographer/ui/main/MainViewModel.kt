@@ -1,13 +1,6 @@
 package com.hex.stenographer.ui.main
 
 import android.net.Uri
-import android.content.ContentResolver
-import com.hex.stenographer.llm.LlamaSession
-import com.hex.stenographer.llm.SafeTextPolisher
-import com.hex.stenographer.llm.PolishEvent
-import com.hex.stenographer.llm.TranscriptJson
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import android.os.SystemClock
 import android.util.Log
 import androidx.lifecycle.ViewModel
@@ -16,14 +9,11 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.hex.stenographer.asr.SherpaOfflineRecognizer
-import com.hex.stenographer.asr.AsrChunk
-import com.hex.stenographer.asr.TranscriptText
 import com.hex.stenographer.audio.AndroidAudioImporter
 import com.hex.stenographer.audio.AudioFileInfo
 import com.hex.stenographer.audio.AudioImportException
 import com.hex.stenographer.audio.AudioImporter
 import com.hex.stenographer.audio.normalizeLoudnessInPlace
-import com.hex.stenographer.audio.reduceRumbleInPlace
 import com.hex.stenographer.diarization.SherpaSpeakerDiarizer
 import com.hex.stenographer.models.ModelException
 import com.hex.stenographer.models.ModelStore
@@ -50,9 +40,6 @@ data class ProcessingResult(
     val durationMs: Long,
     val utterances: List<Utterance>,
     val stageTimesMs: Map<Stage, Long>,
-    val polishEvents: List<PolishEvent> = emptyList(),
-    val warning: String? = null,
-    val rumbleFiltered: Boolean = false,
 ) {
     val speakerCount: Int get() = utterances.distinctBy { it.speakerId }.size
 
@@ -74,52 +61,15 @@ class MainViewModel(
     private val importer: AudioImporter,
     private val models: ModelStore,
     private val engine: SpeechEngine,
-    private val resolver: ContentResolver,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<MainUiState>(MainUiState.NoFile)
     val state: StateFlow<MainUiState> = _state.asStateFlow()
 
     private var job: Job? = null
-    private var pendingExport: String? = null
-    private val _notice = MutableStateFlow<String?>(null)
-    val notice = _notice.asStateFlow()
 
-    fun prepareExport(): Boolean {
-        val result = (_state.value as? MainUiState.Done)?.result ?: return false
-        pendingExport = TranscriptJson.encode(result.utterances, result.durationMs)
-        return true
-    }
-
-    fun export(uri: Uri?) {
-        val json = pendingExport
-        pendingExport = null
-        if (uri == null || json == null) return
-        viewModelScope.launch {
-            try {
-                withContext(Dispatchers.IO) {
-                    checkNotNull(resolver.openOutputStream(uri, "wt")).use {
-                        it.write(json.toByteArray(Charsets.UTF_8))
-                    }
-                }
-                _notice.value = "JSON сохранён"
-            } catch (e: CancellationException) { throw e
-            } catch (e: Exception) {
-                _notice.value = "Не удалось сохранить JSON. Результат сохранён на экране."
-            }
-        }
-    }
-
-    fun editText(index: Int, text: String, speaker: String) {
-        if (job?.isActive == true || text.isBlank() || !speaker.matches(Regex("speaker_[1-9][0-9]*"))) return
-        _state.update { state ->
-            if (state !is MainUiState.Done || index !in state.result.utterances.indices) state
-            else state.copy(result = state.result.copy(utterances = state.result.utterances.mapIndexed { i, u ->
-                if (i == index) u.copy(text = text, speakerId = speaker) else u
-            }))
-        }
-    }
-
+    // Kept outside saved-state Bundle: long transcripts can exceed Binder's size limit.
+    var pendingExport: String? = null
 
     init {
         viewModelScope.launch { runCatching { models.prune() } }
@@ -146,10 +96,7 @@ class MainViewModel(
             _state.value = snapshot.copy(reprocessing = index)
             try {
                 val audio = importer.decode(snapshot.file.uri) {}
-                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
-                    if (snapshot.result.rumbleFiltered) audio.reduceRumbleInPlace()
-                    audio.normalizeLoudnessInPlace()
-                }
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { audio.normalizeLoudnessInPlace() }
                 val span = com.hex.stenographer.diarization.SpeechSpan(
                     1, audio.msToSample(item.startMs), audio.msToSample(item.endMs))
                 val chunks = com.hex.stenographer.asr.ChunkPlanner.plan(
@@ -190,7 +137,7 @@ class MainViewModel(
         }
     }
 
-    fun process(reduceRumble: Boolean = false) {
+    fun process() {
         if (job?.isActive == true) return
         val file = when (val s = _state.value) {
             is MainUiState.Ready -> s.file
@@ -199,26 +146,22 @@ class MainViewModel(
             else -> null
         } ?: return
 
-        _notice.value = null
         job = viewModelScope.launch {
             val timer = StageTimer(file)
             _state.value = try {
                 timer.start(Stage.PreparingModels)
                 models.require(*(engine.requiredModels + "qwen2.5-0.5b-instruct-q4_k_m.gguf").toTypedArray()) { timer.progress(Stage.PreparingModels, it) }
 
-                val (durationMs, utterances) = recognizeFile(file, timer, reduceRumble)
+                val (durationMs, utterances) = recognizeFile(file, timer)
                 timer.start(Stage.Polishing)
                 val model = models.require("qwen2.5-0.5b-instruct-q4_k_m.gguf").single()
-                val events = mutableListOf<PolishEvent>()
                 val polished = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
                     com.hex.stenographer.llm.SafeTextPolisher(
                         { com.hex.stenographer.llm.LlamaSession(model) },
-                        { events += it; Log.i(TAG, "LLM: $it") },
+                        { Log.i(TAG, "LLM: $it") },
                     ).polish(utterances)
                 }
-                MainUiState.Done(file, ProcessingResult(durationMs, polished, timer.finish(), events,
-                    if (events.any { it.status != "accepted" }) "Часть ответов LLM отклонена; сохранён текст ASR." else null,
-                    reduceRumble))
+                MainUiState.Done(file, ProcessingResult(durationMs, polished, timer.finish()))
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -229,13 +172,10 @@ class MainViewModel(
     }
 
     /** PCM stays in this frame and is no longer retained when LLM starts. */
-    private suspend fun recognizeFile(file: AudioFileInfo, timer: StageTimer, reduceRumble: Boolean): Pair<Long, List<Utterance>> {
+    private suspend fun recognizeFile(file: AudioFileInfo, timer: StageTimer): Pair<Long, List<Utterance>> {
         timer.start(Stage.Decoding)
         val audio = importer.decode(file.uri) { timer.progress(Stage.Decoding, it) }
-        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
-            if (reduceRumble) audio.reduceRumbleInPlace()
-            audio.normalizeLoudnessInPlace()
-        }
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { audio.normalizeLoudnessInPlace() }
         val items = engine.run(audio) { speechStage, fraction ->
             val stage = speechStage.toStage()
             if (fraction == null) timer.start(stage) else timer.progress(stage, fraction)
@@ -299,7 +239,7 @@ class MainViewModel(
                 val app = checkNotNull(this[APPLICATION_KEY])
                 val models = ModelStore(app)
                 val engine = DefaultSpeechEngine(SherpaSpeakerDiarizer(models), SherpaOfflineRecognizer(models))
-                MainViewModel(AndroidAudioImporter(app), models, engine, app.contentResolver)
+                MainViewModel(AndroidAudioImporter(app), models, engine)
             }
         }
     }

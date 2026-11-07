@@ -300,36 +300,38 @@ val prepareTestAudioAssets = tasks.register<PrepareAssets>("prepareTestAudioAsse
 android {
     namespace = "com.hex.stenographer"
     ndkVersion = "28.2.13676358"
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
+    }
     compileSdk {
         version = release(37)
     }
 
     defaultConfig {
         applicationId = "com.hex.stenographer"
+        externalNativeBuild {
+            cmake { arguments += listOf("-DCMAKE_BUILD_TYPE=Release", "-DANDROID_STL=c++_shared") }
+        }
         minSdk = 26
         targetSdk = 37
         versionCode = 1
         versionName = "1.0"
-
-        ndk { abiFilters += providers.gradleProperty("llmAbi").getOrElse("arm64-v8a") }
-        externalNativeBuild {
-            cmake {
-                arguments += listOf("-DCMAKE_BUILD_TYPE=Release", "-DANDROID_STL=c++_shared")
-            }
-        }
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         buildConfigField("String", "ASR_MODEL", "\"$asrModel\"")
 
         // Inference targets arm64 phones; build types add ABIs on top of this.
-
+        ndk { abiFilters += "arm64-v8a" }
     }
 
     buildTypes {
         debug {
             // x86_64 lets the emulator run the native pipeline in instrumented tests.
-            if (!providers.gradleProperty("llmAbi").isPresent) { ndk { abiFilters += "x86_64" } }
+            ndk { abiFilters += "x86_64" }
         }
         release {
             // Installable hackathon build; production signing remains external.
@@ -348,12 +350,6 @@ android {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
-    externalNativeBuild {
-        cmake {
-            path = file("src/main/cpp/CMakeLists.txt")
-            version = "3.22.1"
-        }
-    }
     buildFeatures {
         compose = true
         buildConfig = true
@@ -370,7 +366,6 @@ androidComponents {
         variant.androidTest?.sources?.assets
             ?.addGeneratedSourceDirectory(prepareTestAudioAssets, PrepareAssets::outputDir)
     }
-
 }
 
 dependencies {

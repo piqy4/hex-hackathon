@@ -1,10 +1,5 @@
 # Состояние интеграции
 
-## Слияние с roma
-Сохранены изменения c41cda1: фильтр низкочастотного гула, обработка вложенных перебиваний, назначение целых слов говорящим и редактирование speaker_id. Основное приложение использует общий ModelStore и пакет com.hex.stenographer.llm. Старый LlamaSession делегирует вызовы общему JNI для совместимости тестов.
-Оба сквозных теста сохранены: IntegratedPipelineTest — корпус A/B/C; IntegratedDeviceAcceptanceTest — файл, переданный через аргумент audio.
-После слияния: testDebugUnitTest — 71 passed, 0 skipped, 0 failed; compileDebugAndroidTestKotlin и assembleRelease -PdemoSigning=true — успешно. Приведённые ниже аппаратные замеры относятся к версии до этого слияния; новый сквозной UI-прогон не выполнялся.
-
 ## Изменения 8 ноября 2026
 - Экспорт CreateDocument: строгий JSON, UTF-8, проверка интервалов, отмена сохраняет результат.
 - Перенесён модуль участника №3 из соседнего hex_app: llama.cpp JNI, Qwen2.5-0.5B-Instruct Q4_K_M, SafeTextPolisher.

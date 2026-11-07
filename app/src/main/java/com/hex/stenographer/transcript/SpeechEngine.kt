@@ -46,7 +46,6 @@ class DefaultSpeechEngine(
     private val recognizer: SpeechRecognizer,
     private val chunking: ChunkingConfig = ChunkingConfig(),
     private val boundaries: BoundaryConfig = BoundaryConfig(),
-    private val onWordAlignment: (Boolean) -> Unit = {},
 ) : SpeechEngine {
 
     override val requiredModels: List<String>
@@ -57,22 +56,6 @@ class DefaultSpeechEngine(
         val spans = diarizer.diarize(audio) { progress.onProgress(SpeechStage.Diarization, it) }
 
         progress.onProgress(SpeechStage.Recognition, null)
-        if (recognizer.requiredModels.any { it.startsWith("gigaam-") }) {
-            val continuous = ChunkPlanner.plan(audio.samples, audio.sampleRate, WordSpeakers.regions(spans, audio.sampleRate), chunking)
-            val recognized = recognizer.transcribe(audio, continuous) { progress.onProgress(SpeechStage.Recognition, it) }
-            if (recognized.size == continuous.size) {
-                val assigned = continuous.zip(recognized).map { (chunk, result) ->
-                    if (TranscriptText.clean(result.text) == null) emptyList()
-                    else WordSpeakers.assign(chunk, result, spans, audio.sampleRate)
-                }
-                if (assigned.all { it != null }) {
-                    onWordAlignment(true)
-                    return assigned.flatMap { checkNotNull(it) }.sortedBy { it.startMs }
-                }
-            }
-            onWordAlignment(false)
-            // Unsupported/malformed token alignment: retain the tested segment-based fallback.
-        }
         val chunks = ChunkPlanner.plan(audio.samples, audio.sampleRate, spans, chunking)
         val results = recognizer.transcribe(audio, chunks) { progress.onProgress(SpeechStage.Recognition, it) }
 

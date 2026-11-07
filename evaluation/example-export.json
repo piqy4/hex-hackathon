@@ -1,6 +1,0 @@
-{
-  "transcript": [
-    {"speaker_id": "speaker_1", "start_ms": 0, "end_ms": 3000, "text": "Привет, как дела?"},
-    {"speaker_id": "speaker_2", "start_ms": 4000, "end_ms": 7000, "text": "Добрый день, коллеги."}
-  ]
-}
