@@ -13,8 +13,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.hex.stenographer.ui.importer.ImportScreen
-import com.hex.stenographer.ui.importer.ImportViewModel
+import com.hex.stenographer.ui.main.MainScreen
+import com.hex.stenographer.ui.main.MainViewModel
 import com.hex.stenographer.ui.theme.MyApplicationTheme
 
 class MainActivity : ComponentActivity() {
@@ -23,17 +23,17 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             MyApplicationTheme {
-                val viewModel: ImportViewModel = viewModel(factory = ImportViewModel.Factory)
+                val viewModel: MainViewModel = viewModel(factory = MainViewModel.Factory)
                 val state by viewModel.state.collectAsStateWithLifecycle()
                 val picker = rememberLauncherForActivityResult(
                     ActivityResultContracts.OpenDocument(),
                     viewModel::onFileSelected,
                 )
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    ImportScreen(
+                    MainScreen(
                         state = state,
                         onPickFile = { picker.launch(AUDIO_MIME_TYPES) },
-                        onDecode = viewModel::decode,
+                        onProcess = viewModel::process,
                         modifier = Modifier.padding(innerPadding),
                     )
                 }

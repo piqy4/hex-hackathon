@@ -1,16 +1,23 @@
 <resources>
     <string name="app_name">My Application</string>
 
-    <string name="import_pick_file">Выбрать аудиофайл</string>
-    <string name="import_no_file">Файл не выбран</string>
-    <string name="import_decode">Декодировать</string>
-    <string name="import_decoding">Декодирование…</string>
-    <string name="import_result">Длительность: %1$s\nЧастота: %2$d Гц, моно\nСэмплов: %3$d\nВремя декодирования: %4$d мс (RTF %5$s)</string>
+    <string name="main_pick_file">Выбрать аудиофайл</string>
+    <string name="main_no_file">Файл не выбран</string>
+    <string name="main_process">Обработать</string>
+    <string name="main_no_speech">Речь не найдена</string>
+    <string name="main_summary">Длительность: %1$s\nГоворящих: %2$d, реплик: %3$d\nДекодирование: %4$d мс, диаризация: %5$d мс (RTF %6$s)</string>
 
-    <string name="import_error_unreadable">Не удалось открыть файл. Возможно, он удалён или доступ отозван.</string>
-    <string name="import_error_unsupported">Формат файла не поддерживается на этом устройстве.</string>
-    <string name="import_error_corrupted">Файл повреждён или не содержит аудио.</string>
-    <string name="import_error_too_long">Запись слишком длинная.</string>
-    <string name="import_error_memory">Недостаточно памяти для обработки записи.</string>
-    <string name="import_error_unknown">Неизвестная ошибка при декодировании.</string>
+    <string name="stage_models">Подготовка моделей…</string>
+    <string name="stage_decoding">Декодирование аудио…</string>
+    <string name="stage_diarization">Поиск говорящих…</string>
+
+    <string name="error_unreadable">Не удалось открыть файл. Возможно, он удалён или доступ отозван.</string>
+    <string name="error_unsupported">Формат файла не поддерживается на этом устройстве.</string>
+    <string name="error_corrupted">Файл повреждён или не содержит аудио.</string>
+    <string name="error_too_long">Запись слишком длинная.</string>
+    <string name="error_memory">Недостаточно памяти для обработки записи.</string>
+    <string name="error_models_missing">Веса моделей не найдены. Переустановите приложение или загрузите комплект весов.</string>
+    <string name="error_models_corrupted">Веса моделей повреждены: контрольная сумма не совпала.</string>
+    <string name="error_storage">Недостаточно свободного места для установки моделей.</string>
+    <string name="error_failed">Сбой обработки. Попробуйте ещё раз.</string>
 </resources>
