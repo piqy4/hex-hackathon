@@ -1,15 +1,42 @@
+# ===== Стандартное для Android / Gradle =====
+.gradle/
+.kotlin/
+/build/
+/captures/
+.externalNativeBuild/
+.cxx/
 *.iml
-.gradle
-/local.properties
-/.idea/caches
-/.idea/libraries
-/.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
+*.hprof
+
+# ===== IDE: настройки Android Studio у каждого свои =====
+/.idea/
+
+# ===== Системные файлы =====
 .DS_Store
-/build
-/captures
-.externalNativeBuild
-.cxx
+Thumbs.db
+desktop.ini
+
+# ===== Локальные пути и секреты =====
 local.properties
+keystore.properties
+.env
+*.jks
+*.keystore
+
+# ===== Модели: в Git только контрольные суммы =====
+/models/*
+!/models/SHA256SUMS
+*.onnx
+*.gguf
+*.tar.bz2
+
+# ===== Тестовые записи с голосами =====
+/test-audio/
+*.wav
+*.mp3
+*.m4a
+
+# ===== Артефакты сборки (APK выкладываем через GitHub Releases) =====
+*.apk
+*.aab
+/app/release/
