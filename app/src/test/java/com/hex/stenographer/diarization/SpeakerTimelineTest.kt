@@ -1,7 +1,7 @@
 package com.hex.stenographer.diarization
 
 import com.hex.stenographer.audio.PcmAudio
-import com.hex.stenographer.audio.normalizePeakInPlace
+import com.hex.stenographer.audio.normalizeLoudnessInPlace
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -98,15 +98,22 @@ class SpeakerTimelineTest {
     }
 
     @Test
-    fun `peak normalization scales without clipping and caps gain`() {
-        val loud = PcmAudio.of(floatArrayOf(0.1f, -0.5f, 0.25f), rate)
-        assertEquals(1.9f, loud.normalizePeakInPlace(), 1e-4f)
-        assertEquals(-0.95f, loud.samples[1], 1e-6f)
+    fun `loudness normalization ignores silence and clicks and caps gain`() {
+        // 1 s of -41 dBFS tone between 2 s of silence, plus one 0.8 click: peak normalization would do nothing.
+        val x = FloatArray(4 * rate)
+        val amp = (Math.pow(10.0, -41.0 / 20) * Math.sqrt(2.0)).toFloat()
+        for (i in 0 until rate) x[2 * rate + i] = amp * kotlin.math.sin(2 * Math.PI * 300 * i / rate).toFloat()
+        x[100] = 0.8f
+        val audio = PcmAudio.of(x, rate)
+        val gain = audio.normalizeLoudnessInPlace(speechFraction = 0.25)
+        assertEquals(18.0, gain, 0.6) // -41 -> -23 dBFS
+        assertEquals(1f, audio.samples[100], 0f) // the click is clamped, not the speech
+        assertTrue(audio.samples.all { it in -1f..1f })
 
-        val quiet = PcmAudio.of(floatArrayOf(0.001f, -0.002f), rate)
-        assertEquals(20f, quiet.normalizePeakInPlace(), 0f)
+        val nearSilent = PcmAudio.of(FloatArray(rate) { if (it % 2 == 0) 1e-5f else -1e-5f }, rate)
+        assertEquals(30.0, nearSilent.normalizeLoudnessInPlace(), 0.0) // capped
 
-        assertEquals(1f, PcmAudio.of(FloatArray(10), rate).normalizePeakInPlace(), 0f)
+        assertEquals(0.0, PcmAudio.of(FloatArray(rate), rate).normalizeLoudnessInPlace(), 0.0)
     }
 
     private fun assertNonOverlappingSorted(spans: List<SpeechSpan>) {

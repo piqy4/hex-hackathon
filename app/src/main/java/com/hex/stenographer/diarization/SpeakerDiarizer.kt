@@ -15,6 +15,9 @@ import kotlinx.coroutines.withContext
 
 /** Finds who speaks when. The result is sorted, non-overlapping and uses stable 1-based speaker ids. */
 interface SpeakerDiarizer {
+    /** Model files that must be installed before [diarize]; used to prepare them up front. */
+    val requiredModels: List<String>
+
     /** @param onProgress fraction in `[0, 1]`, called from a background thread. */
     suspend fun diarize(audio: PcmAudio, onProgress: (Float) -> Unit = {}): List<SpeechSpan>
 }
@@ -22,16 +25,19 @@ interface SpeakerDiarizer {
 data class DiarizationConfig(
     /**
      * Clustering distance threshold; higher -> fewer speakers. The sherpa-onnx example uses 0.5 with
-     * the zh-cn ERes2Net; with the VoxCeleb ERes2Net the 4-speaker reference sample splits into 7
-     * clusters at 0.5–0.6, is exactly 4 across 0.7–0.9 and merges to 3 at 1.0. 0.8 is the middle of
-     * that plateau. Re-check on the team's Russian recordings.
+     * the zh-cn ERes2Net. Measured with the VoxCeleb ERes2Net after loudness normalization
+     * (README, "Сравнение"): Russian dialogs A/C are best over 0.8–0.85 (lower values split speakers,
+     * zh-cn embeddings are worse everywhere) and the 4-speaker sample needs ≥ 0.85.
+     * Re-check on the team's own recordings.
      */
-    val clusteringThreshold: Float = 0.8f,
+    val clusteringThreshold: Float = 0.85f,
     /** Fixed number of speakers, or `null` to detect it from audio (the default required by the spec). */
     val numSpeakers: Int? = null,
     /** Pyannote speech regions shorter than this are discarded, seconds. */
     val minDurationOnSec: Float = 0.2f,
     val timeline: TimelineConfig = TimelineConfig(),
+    /** Speaker embedding weights; the zh-cn ERes2Net can be sideloaded for comparison. */
+    val embeddingModel: String = SherpaSpeakerDiarizer.EMBEDDING_MODEL,
     val numThreads: Int = defaultThreads(),
 ) {
     init {
@@ -59,8 +65,10 @@ class SherpaSpeakerDiarizer(
     private val dispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) : SpeakerDiarizer {
 
+    override val requiredModels: List<String> = listOf(SEGMENTATION_MODEL, config.embeddingModel)
+
     override suspend fun diarize(audio: PcmAudio, onProgress: (Float) -> Unit): List<SpeechSpan> {
-        val (segmentation, embedding) = models.require(SEGMENTATION_MODEL, EMBEDDING_MODEL)
+        val (segmentation, embedding) = models.require(*requiredModels.toTypedArray())
         return withContext(dispatcher) {
             val engine = OfflineSpeakerDiarization(config = nativeConfig(segmentation.path, embedding.path))
             try {

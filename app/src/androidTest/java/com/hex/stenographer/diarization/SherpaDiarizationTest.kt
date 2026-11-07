@@ -6,7 +6,7 @@ import android.util.Log
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.hex.stenographer.audio.AndroidAudioImporter
-import com.hex.stenographer.audio.normalizePeakInPlace
+import com.hex.stenographer.audio.normalizeLoudnessInPlace
 import com.hex.stenographer.models.ModelStore
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -38,9 +38,11 @@ class SherpaDiarizationTest {
         models.require(SherpaSpeakerDiarizer.SEGMENTATION_MODEL, SherpaSpeakerDiarizer.EMBEDDING_MODEL)
         val t1 = SystemClock.elapsedRealtime()
         val audio = AndroidAudioImporter(appContext).decode(Uri.fromFile(wav))
-        audio.normalizePeakInPlace()
+        audio.normalizeLoudnessInPlace()
         val t2 = SystemClock.elapsedRealtime()
-        val spans = SherpaSpeakerDiarizer(models).diarize(audio)
+        val threshold = InstrumentationRegistry.getArguments().getString("threshold")?.toFloat()
+        val config = threshold?.let { DiarizationConfig(clusteringThreshold = it) } ?: DiarizationConfig()
+        val spans = SherpaSpeakerDiarizer(models, config).diarize(audio)
         val t3 = SystemClock.elapsedRealtime()
 
         spans.forEach {

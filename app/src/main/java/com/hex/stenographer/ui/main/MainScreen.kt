@@ -22,6 +22,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.hex.stenographer.R
 import com.hex.stenographer.audio.AudioFileInfo
+import com.hex.stenographer.transcript.Utterance
 import java.util.Locale
 
 @Composable
@@ -62,8 +63,8 @@ fun MainScreen(
             }
         }
         if (state is MainUiState.Done) {
-            itemsIndexed(state.result.spans, key = { i, _ -> i }) { _, span ->
-                SpanRow(span)
+            itemsIndexed(state.result.utterances, key = { i, _ -> i }) { _, utterance ->
+                UtteranceRow(utterance)
                 HorizontalDivider()
             }
         }
@@ -105,21 +106,28 @@ private fun Summary(result: ProcessingResult) {
             R.string.main_summary,
             formatTimestamp(result.durationMs),
             result.speakerCount,
-            result.spans.size,
+            result.utterances.size,
             result.stageTimesMs[Stage.Decoding] ?: 0L,
             result.stageTimesMs[Stage.Diarization] ?: 0L,
+            result.stageTimesMs[Stage.Recognition] ?: 0L,
             String.format(Locale.US, "%.3f", result.rtf),
         ),
         style = MaterialTheme.typography.bodyMedium,
     )
-    if (result.spans.isEmpty()) Text(stringResource(R.string.main_no_speech))
+    if (result.utterances.isEmpty()) Text(stringResource(R.string.main_no_speech))
 }
 
 @Composable
-private fun SpanRow(span: SpanItem) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(span.speakerId, fontWeight = FontWeight.SemiBold)
-        Text("${formatTimestamp(span.startMs)} – ${formatTimestamp(span.endMs)}")
+private fun UtteranceRow(utterance: Utterance) {
+    Column(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(utterance.speakerId, fontWeight = FontWeight.SemiBold)
+            Text(
+                "${formatTimestamp(utterance.startMs)} – ${formatTimestamp(utterance.endMs)}",
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+        Text(utterance.text)
     }
 }
 
@@ -127,6 +135,7 @@ private fun Stage.labelRes(): Int = when (this) {
     Stage.PreparingModels -> R.string.stage_models
     Stage.Decoding -> R.string.stage_decoding
     Stage.Diarization -> R.string.stage_diarization
+    Stage.Recognition -> R.string.stage_recognition
 }
 
 private fun ProcessingError.messageRes(): Int = when (this) {

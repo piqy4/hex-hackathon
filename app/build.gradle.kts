@@ -68,6 +68,8 @@ abstract class DownloadVerified : DefaultTask() {
 /**
  * Copies files into `<outputDir>/<subdir>/`. With [writeManifest], also writes
  * `manifest.properties` (`name=size:sha256`) that the app uses to verify installed weights.
+ * [manifestOnly] lists known but not bundled weights (`name -> sha256`, size `-1`), which the app
+ * accepts when they are sideloaded with adb.
  */
 abstract class PrepareAssets : DefaultTask() {
     @get:InputFiles
@@ -79,6 +81,9 @@ abstract class PrepareAssets : DefaultTask() {
 
     @get:Input
     abstract val writeManifest: Property<Boolean>
+
+    @get:Input
+    abstract val manifestOnly: MapProperty<String, String>
 
     @get:OutputDirectory
     abstract val outputDir: DirectoryProperty
@@ -93,8 +98,69 @@ abstract class PrepareAssets : DefaultTask() {
             file.copyTo(dir.resolve(file.name), overwrite = true)
             manifest.append("${file.name}=${file.length()}:${Sha256.of(file)}\n")
         }
+        manifestOnly.get().toSortedMap().forEach { (name, sha) -> manifest.append("$name=-1:$sha\n") }
         if (writeManifest.get()) dir.resolve("manifest.properties").writeText(manifest.toString())
     }
+}
+
+/**
+ * Downloads small slices of public Russian speech datasets through the Hugging Face
+ * datasets-server API into `test-audio/eval/` plus `clips.tsv` (file, speaker, source, text).
+ * Not part of the build; run `./gradlew downloadEvalSet` once. Audio is not redistributed: each
+ * row keeps its source (dataset@revision/split/row) so licenses stay traceable.
+ */
+abstract class DownloadEvalSet : DefaultTask() {
+    /** `name|dataset|split|offset|count|speakerMode` where speakerMode is `group` or `clip`. */
+    @get:Input
+    abstract val slices: ListProperty<String>
+
+    @get:OutputDirectory
+    abstract val outputDir: DirectoryProperty
+
+    @TaskAction
+    fun download() {
+        val dir = outputDir.get().asFile.apply { mkdirs() }
+        val tsv = StringBuilder()
+        for (slice in slices.get()) {
+            val (name, dataset, split, offset, count, mode) = slice.split('|')
+            val api = "https://datasets-server.huggingface.co/rows?dataset=$dataset&config=default" +
+                "&split=$split&offset=$offset&length=$count"
+            @Suppress("UNCHECKED_CAST")
+            val json = groovy.json.JsonSlurper().parse(URI(api).toURL()) as Map<String, Any?>
+            val rows = json["rows"] as List<Map<String, Any?>>
+            for (entry in rows) {
+                val index = entry["row_idx"] as Int
+                val row = entry["row"] as Map<String, Any?>
+                val audio = (row["audio"] as List<Map<String, Any?>>).first()
+                val text = (row["transcription"] as String).replace(Regex("""\s+"""), " ").trim()
+                if (text.isEmpty()) continue
+                val file = "$name-%04d.wav".format(index)
+                URI(audio["src"] as String).toURL().openStream().use { input ->
+                    dir.resolve(file).outputStream().use { input.copyTo(it) }
+                }
+                val speaker = if (mode == "group") name else "$name-$index"
+                tsv.append("$file\t$speaker\t$dataset/$split/$index\t$text\n")
+            }
+            logger.lifecycle("$name: ${rows.size} clips from $dataset")
+        }
+        dir.resolve("clips.tsv").writeText(tsv.toString())
+    }
+
+    private operator fun <T> List<T>.component6(): T = this[5]
+}
+
+tasks.register<DownloadEvalSet>("downloadEvalSet") {
+    group = "evaluation"
+    description = "Fetches ~70 Russian clips with references for the on-device evaluation."
+    slices = listOf(
+        // One audiobook chapter: a single human reader who keeps coming back (speaker A).
+        "rulib|bond005/rulibrispeech|test|0|16|group",
+        // Phone recordings of many people: short real-world turns, one speaker per clip.
+        "sova|bond005/sova_rudevices|test|0|24|clip",
+        // Far-field smart-speaker requests: reverberation and noise.
+        "golosfar|bond005/sberdevices_golos_100h_farfield|test|0|16|clip",
+    )
+    outputDir = rootProject.layout.projectDirectory.dir("test-audio/eval")
 }
 
 val modelChecksums: Map<String, String> =
@@ -107,13 +173,67 @@ val modelChecksums: Map<String, String> =
             name to hash
         }
 
-/** Weights bundled into the APK. File name (as in SHA256SUMS) to source URL. */
-val bundledModels = mapOf(
+fun hf(repo: String, commit: String, file: String) =
+    "https://huggingface.co/csukuangfj/$repo/resolve/$commit/$file"
+
+val whisperTiny = "65176e2deb88badc814a94058666cadccc29b61c"
+val whisperBase = "bb53ee204431c90d314c1cc08d28d23e5b7927cc"
+val gigaamCtc = "32a4c7cc81809bd132e2d935ab99e9e6ab47fbec"
+val gigaamCtcPunct = "4fb5407ff028a69fec516cdf4c10fac9ddea7c16"
+val zipformerRu = "641de8d322c05b9087ad2927ccda4bda3cccc159"
+
+/**
+ * ASR models by id (= AsrModel.id in the app): local file name to pinned source URL.
+ * One is bundled: `./gradlew assembleRelease -PasrModel=whisper-base`.
+ */
+val asrModels: Map<String, Map<String, String>> = mapOf(
+    "whisper-tiny" to mapOf(
+        "whisper-tiny-encoder.int8.onnx" to hf("sherpa-onnx-whisper-tiny", whisperTiny, "tiny-encoder.int8.onnx"),
+        "whisper-tiny-decoder.int8.onnx" to hf("sherpa-onnx-whisper-tiny", whisperTiny, "tiny-decoder.int8.onnx"),
+        "whisper-tokens.txt" to hf("sherpa-onnx-whisper-tiny", whisperTiny, "tiny-tokens.txt"),
+    ),
+    "whisper-base" to mapOf(
+        "whisper-base-encoder.int8.onnx" to hf("sherpa-onnx-whisper-base", whisperBase, "base-encoder.int8.onnx"),
+        "whisper-base-decoder.int8.onnx" to hf("sherpa-onnx-whisper-base", whisperBase, "base-decoder.int8.onnx"),
+        "whisper-tokens.txt" to hf("sherpa-onnx-whisper-tiny", whisperTiny, "tiny-tokens.txt"), // identical
+    ),
+    "gigaam-v3-ctc" to mapOf(
+        "gigaam-v3-ctc.int8.onnx" to hf("sherpa-onnx-nemo-ctc-giga-am-v3-russian-2025-12-16", gigaamCtc, "model.int8.onnx"),
+        "gigaam-v3-ctc-tokens.txt" to hf("sherpa-onnx-nemo-ctc-giga-am-v3-russian-2025-12-16", gigaamCtc, "tokens.txt"),
+    ),
+    "gigaam-v3-ctc-punct" to mapOf(
+        "gigaam-v3-ctc-punct.int8.onnx" to
+            hf("sherpa-onnx-nemo-ctc-punct-giga-am-v3-russian-2025-12-16", gigaamCtcPunct, "model.int8.onnx"),
+        "gigaam-v3-ctc-punct-tokens.txt" to
+            hf("sherpa-onnx-nemo-ctc-punct-giga-am-v3-russian-2025-12-16", gigaamCtcPunct, "tokens.txt"),
+    ),
+    "zipformer-ru" to listOf("encoder.int8.onnx", "decoder.onnx", "joiner.int8.onnx", "tokens.txt").associate {
+        "zipformer-ru-$it" to hf("sherpa-onnx-zipformer-ru-int8-2025-04-20", zipformerRu, it)
+    },
+)
+
+val asrModel: String = providers.gradleProperty("asrModel").getOrElse("gigaam-v3-ctc")
+require(asrModel in asrModels) { "asrModel must be one of ${asrModels.keys}, got $asrModel" }
+
+val diarizationModels = mapOf(
     "pyannote-segmentation-3-0-int8.onnx" to
         "https://huggingface.co/csukuangfj/sherpa-onnx-pyannote-segmentation-3-0/resolve/9403a6902bb58e3d5ae8c7e77c3422de279db2e0/model.int8.onnx",
     "3dspeaker-eres2net-voxceleb-16k.onnx" to
         "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_eres2net_sv_en_voxceleb_16k.onnx",
 )
+
+/** Weights bundled into the APK. File name (as in SHA256SUMS) to source URL. */
+val bundledModels = diarizationModels + asrModels.getValue(asrModel)
+
+/** Known alternatives that are not bundled, compared by sideloading. */
+val alternativeModels = mapOf(
+    "3dspeaker-eres2net-base-zh-cn-16k.onnx" to
+        "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx",
+)
+
+/** Every known weight, for comparison runs (`./gradlew downloadAllModels`, then adb push). */
+val allModels = diarizationModels + alternativeModels +
+    asrModels.values.fold(emptyMap<String, String>()) { acc, m -> acc + m }
 
 val sherpaOnnxVersion = "1.13.8"
 
@@ -123,7 +243,7 @@ val downloadSherpaOnnx = tasks.register<DownloadVerified>("downloadSherpaOnnx") 
     destination = layout.projectDirectory.file("libs/sherpa-onnx-$sherpaOnnxVersion.aar")
 }
 
-val modelDownloads = bundledModels.map { (name, sourceUrl) ->
+val modelDownloads = allModels.mapValues { (name, sourceUrl) ->
     tasks.register<DownloadVerified>("downloadModel-${name.substringBeforeLast('.')}") {
         url = sourceUrl
         sha256 = modelChecksums[name] ?: throw GradleException("$name is missing from models/SHA256SUMS")
@@ -131,10 +251,17 @@ val modelDownloads = bundledModels.map { (name, sourceUrl) ->
     }
 }
 
+tasks.register("downloadAllModels") {
+    group = "models"
+    description = "Downloads every known model into /models for comparison runs."
+    dependsOn(modelDownloads.values)
+}
+
 val prepareModelAssets = tasks.register<PrepareAssets>("prepareModelAssets") {
-    modelDownloads.forEach { task -> sources.from(task.flatMap { it.destination }) }
+    bundledModels.keys.forEach { name -> sources.from(modelDownloads.getValue(name).flatMap { it.destination }) }
     subdir = "models"
     writeManifest = true
+    manifestOnly = modelChecksums - bundledModels.keys
     outputDir = layout.buildDirectory.dir("generated/modelAssets")
 }
 
@@ -146,9 +273,18 @@ val downloadTestAudio = tasks.register<DownloadVerified>("downloadTestAudio") {
 }
 
 val prepareTestAudioAssets = tasks.register<PrepareAssets>("prepareTestAudioAssets") {
-    sources.from(downloadTestAudio.flatMap { it.destination })
+    dependsOn(downloadTestAudio)
+    // Plus the evaluation set and team recordings, when present locally.
+    sources.from(
+        rootProject.layout.projectDirectory.dir("test-audio").asFileTree.matching {
+            include("*.wav") // 4-speaker diarization sample
+            include("eval/*.wav", "eval/*.tsv") // downloadEvalSet + scripts/make-tts-turns.ps1
+            include("dialogs/*.wav", "dialogs/*.json") // team recordings with export-format references
+        },
+    )
     subdir = "audio"
     writeManifest = false
+    manifestOnly = emptyMap()
     outputDir = layout.buildDirectory.dir("generated/testAudioAssets")
 }
 
@@ -168,6 +304,8 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        buildConfigField("String", "ASR_MODEL", "\"$asrModel\"")
 
         // Inference targets arm64 phones; build types add ABIs on top of this.
         ndk { abiFilters += "arm64-v8a" }
@@ -191,6 +329,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
     androidResources {
         // Stored uncompressed: streamed straight from the APK on first launch.
