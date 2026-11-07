@@ -16,8 +16,12 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -30,13 +34,21 @@ import java.util.Locale
 fun MainScreen(
     state: MainUiState,
     onPickFile: () -> Unit,
-    onProcess: () -> Unit,
+    onProcess: (Boolean) -> Unit,
     onExport: () -> Unit,
-    onEdit: (Int, String) -> Unit,
+    onEdit: (Int, String, String) -> Unit,
     onReprocess: (Int) -> Unit,
     modifier: Modifier = Modifier,
+    notice: String? = null,
 ) {
     val busy = state is MainUiState.Processing || (state is MainUiState.Done && state.reprocessing != null)
+    var rumble by remember { mutableStateOf(false) }
+    val view = LocalView.current
+    DisposableEffect(view, busy) {
+        val previous = view.keepScreenOn
+        view.keepScreenOn = busy
+        onDispose { view.keepScreenOn = previous }
+    }
     val context = LocalContext.current
     val player = androidx.compose.runtime.remember(context) { FragmentPlayer(context) }
     val owner = androidx.lifecycle.compose.LocalLifecycleOwner.current
@@ -62,7 +74,8 @@ fun MainScreen(
                     Text(stringResource(R.string.main_no_file), style = MaterialTheme.typography.bodyMedium)
                 } else {
                     FileInfo(file)
-                    Button(onClick = onProcess, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+                    Row { androidx.compose.material3.Checkbox(checked = rumble, onCheckedChange = { rumble = it }, enabled = !busy); Text("Фильтр низкочастотного гула") }
+                    Button(onClick = { onProcess(rumble) }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
                         Text(stringResource(R.string.main_process))
                     }
                 }
@@ -74,6 +87,7 @@ fun MainScreen(
                     )
                     is MainUiState.Done -> {
                         Summary(state.result)
+                        state.result.warning?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                         state.fragmentError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                         if (state.reprocessing != null) Text("Повторное распознавание реплики…")
                         OutlinedButton(onClick = onExport, modifier = Modifier.fillMaxWidth()) {
@@ -84,11 +98,12 @@ fun MainScreen(
                 }
             }
         }
+        notice?.let { item { Text(it) } }
         if (state is MainUiState.Done) {
             itemsIndexed(state.result.utterances, key = { i, _ -> i }) { index, utterance ->
                 UtteranceRow(utterance)
                 if (!busy) {
-                    EditUtterance(utterance.text) { onEdit(index, it) }
+                    EditUtterance(utterance.text, utterance.speakerId) { text, speaker -> onEdit(index, text, speaker) }
                     TextButton(onClick = { onReprocess(index) }) { Text("Распознать заново") }
                     TextButton(onClick = {
                         player.play(state.file.uri, utterance.startMs, utterance.endMs) {
@@ -148,6 +163,7 @@ private fun Summary(result: ProcessingResult) {
         ),
         style = MaterialTheme.typography.bodyMedium,
     )
+    Text("LLM: ${result.stageTimesMs[Stage.Polishing] ?: 0} мс, принятых правок: ${result.polishEvents.sumOf { it.changed }}")
     if (result.utterances.isEmpty()) Text(stringResource(R.string.main_no_speech))
 }
 

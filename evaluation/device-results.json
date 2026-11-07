@@ -1,0 +1,359 @@
+{
+  "date": "2026-11-07",
+  "apk_sha256": "5fe4823a996b98c86c554970cd9bf70a67c9b7a2696f2264f9467171d7aeab7b",
+  "configuration": {
+    "asr": "gigaam-v3-ctc",
+    "diarization_threshold": 0.85,
+    "overlap_policy": "SplitTransitions",
+    "llm_batch_size": 1,
+    "word_alignment": true
+  },
+  "network_note": "Connectivity was not changed. App manifest has no INTERNET permission; full airplane-mode acceptance remains outstanding.",
+  "unit_tests": 56,
+  "python_tests": 6,
+  "lint_errors": 0,
+  "lint_warnings": 22,
+  "DER": null,
+  "timing_errors": null,
+  "memory_sample_pss_kib": 878728,
+  "memory_sample_is_peak": false,
+  "runs": [
+    {
+      "device": "PJA110",
+      "android": "13",
+      "foreground_activity": true,
+      "duration_ms": 24192,
+      "decode_ms": 905.735625,
+      "speech_ms": 7783.718851,
+      "llm_ms": 24070.224887,
+      "rtf": 1.3541534128224206,
+      "speakers": 2,
+      "events": [
+        {
+          "batch": 0,
+          "changed": 0,
+          "elapsedMs": 4269,
+          "reason": "Words changed",
+          "size": 1,
+          "status": "fallback_IllegalArgumentException"
+        },
+        {
+          "batch": 1,
+          "changed": 1,
+          "elapsedMs": 5077,
+          "size": 1,
+          "status": "accepted"
+        },
+        {
+          "batch": 2,
+          "changed": 1,
+          "elapsedMs": 3362,
+          "size": 1,
+          "status": "accepted"
+        },
+        {
+          "batch": 3,
+          "changed": 1,
+          "elapsedMs": 4461,
+          "size": 1,
+          "status": "accepted"
+        },
+        {
+          "batch": 4,
+          "changed": 1,
+          "elapsedMs": 3016,
+          "size": 1,
+          "status": "accepted"
+        },
+        {
+          "batch": 5,
+          "changed": 1,
+          "elapsedMs": 3828,
+          "size": 1,
+          "status": "accepted"
+        }
+      ],
+      "utterances": 6,
+      "word_alignment": true,
+      "file": "test1.mp3",
+      "rumble": false,
+      "valid_export": true,
+      "accepted_changes": 5,
+      "text_score": null
+    },
+    {
+      "device": "PJA110",
+      "android": "13",
+      "foreground_activity": true,
+      "duration_ms": 31632,
+      "decode_ms": 3395.174374,
+      "speech_ms": 11372.097287,
+      "llm_ms": 26921.126657,
+      "rtf": 1.3179185103060191,
+      "speakers": 2,
+      "events": [
+        {
+          "batch": 0,
+          "changed": 1,
+          "elapsedMs": 4439,
+          "size": 1,
+          "status": "accepted"
+        },
+        {
+          "batch": 1,
+          "changed": 0,
+          "elapsedMs": 3921,
+          "reason": "Words changed",
+          "size": 1,
+          "status": "fallback_IllegalArgumentException"
+        },
+        {
+          "batch": 2,
+          "changed": 1,
+          "elapsedMs": 2874,
+          "size": 1,
+          "status": "accepted"
+        },
+        {
+          "batch": 3,
+          "changed": 0,
+          "elapsedMs": 4101,
+          "reason": "Words changed",
+          "size": 1,
+          "status": "fallback_IllegalArgumentException"
+        },
+        {
+          "batch": 4,
+          "changed": 1,
+          "elapsedMs": 4654,
+          "size": 1,
+          "status": "accepted"
+        },
+        {
+          "batch": 5,
+          "changed": 1,
+          "elapsedMs": 2873,
+          "size": 1,
+          "status": "accepted"
+        },
+        {
+          "batch": 6,
+          "changed": 0,
+          "elapsedMs": 3993,
+          "reason": "Words changed",
+          "size": 1,
+          "status": "fallback_IllegalArgumentException"
+        }
+      ],
+      "utterances": 7,
+      "word_alignment": true,
+      "file": "test2.mp3",
+      "rumble": false,
+      "valid_export": true,
+      "accepted_changes": 4,
+      "text_score": {
+        "S": 4,
+        "D": 6,
+        "I": 0,
+        "N": 83,
+        "wer": 0.12048192771084337
+      }
+    },
+    {
+      "device": "PJA110",
+      "android": "13",
+      "foreground_activity": true,
+      "duration_ms": 53544,
+      "decode_ms": 6758.722862,
+      "speech_ms": 17920.892233,
+      "llm_ms": 52157.931647,
+      "rtf": 1.4350356107500375,
+      "speakers": 2,
+      "events": [
+        {
+          "batch": 0,
+          "changed": 1,
+          "elapsedMs": 4680,
+          "size": 1,
+          "status": "accepted"
+        },
+        {
+          "batch": 1,
+          "changed": 0,
+          "elapsedMs": 4938,
+          "reason": "Words changed",
+          "size": 1,
+          "status": "fallback_IllegalArgumentException"
+        },
+        {
+          "batch": 2,
+          "changed": 1,
+          "elapsedMs": 5321,
+          "size": 1,
+          "status": "accepted"
+        },
+        {
+          "batch": 3,
+          "changed": 1,
+          "elapsedMs": 4968,
+          "size": 1,
+          "status": "accepted"
+        },
+        {
+          "batch": 4,
+          "changed": 1,
+          "elapsedMs": 4882,
+          "size": 1,
+          "status": "accepted"
+        },
+        {
+          "batch": 5,
+          "changed": 0,
+          "elapsedMs": 4696,
+          "reason": "Words changed",
+          "size": 1,
+          "status": "fallback_IllegalArgumentException"
+        },
+        {
+          "batch": 6,
+          "changed": 0,
+          "elapsedMs": 4358,
+          "reason": "Words changed",
+          "size": 1,
+          "status": "fallback_IllegalArgumentException"
+        },
+        {
+          "batch": 7,
+          "changed": 0,
+          "elapsedMs": 4785,
+          "reason": "Words changed",
+          "size": 1,
+          "status": "fallback_IllegalArgumentException"
+        },
+        {
+          "batch": 8,
+          "changed": 1,
+          "elapsedMs": 3068,
+          "size": 1,
+          "status": "accepted"
+        },
+        {
+          "batch": 9,
+          "changed": 1,
+          "elapsedMs": 3481,
+          "size": 1,
+          "status": "accepted"
+        },
+        {
+          "batch": 10,
+          "changed": 1,
+          "elapsedMs": 3405,
+          "size": 1,
+          "status": "accepted"
+        },
+        {
+          "batch": 11,
+          "changed": 0,
+          "elapsedMs": 3509,
+          "reason": "Words changed",
+          "size": 1,
+          "status": "fallback_IllegalArgumentException"
+        }
+      ],
+      "utterances": 12,
+      "word_alignment": true,
+      "file": "test3.mp3",
+      "rumble": false,
+      "valid_export": true,
+      "accepted_changes": 7,
+      "text_score": {
+        "S": 1,
+        "D": 4,
+        "I": 3,
+        "N": 113,
+        "wer": 0.07079646017699115
+      }
+    },
+    {
+      "device": "PJA110",
+      "android": "13",
+      "foreground_activity": true,
+      "duration_ms": 24192,
+      "decode_ms": 2780.329217,
+      "speech_ms": 7874.523643,
+      "llm_ms": 30726.525353,
+      "rtf": 1.7105397740162038,
+      "speakers": 2,
+      "events": [
+        {
+          "batch": 0,
+          "changed": 0,
+          "elapsedMs": 4696,
+          "reason": "Words changed",
+          "size": 1,
+          "status": "fallback_IllegalArgumentException"
+        },
+        {
+          "batch": 1,
+          "changed": 1,
+          "elapsedMs": 5546,
+          "size": 1,
+          "status": "accepted"
+        },
+        {
+          "batch": 2,
+          "changed": 0,
+          "elapsedMs": 3473,
+          "reason": "Words changed",
+          "size": 1,
+          "status": "fallback_IllegalArgumentException"
+        },
+        {
+          "batch": 3,
+          "changed": 0,
+          "elapsedMs": 3366,
+          "reason": "Words changed",
+          "size": 1,
+          "status": "fallback_IllegalArgumentException"
+        },
+        {
+          "batch": 4,
+          "changed": 0,
+          "elapsedMs": 3301,
+          "reason": "Words changed",
+          "size": 1,
+          "status": "fallback_IllegalArgumentException"
+        },
+        {
+          "batch": 5,
+          "changed": 0,
+          "elapsedMs": 3168,
+          "reason": "Words changed",
+          "size": 1,
+          "status": "fallback_IllegalArgumentException"
+        },
+        {
+          "batch": 6,
+          "changed": 1,
+          "elapsedMs": 4131,
+          "size": 1,
+          "status": "accepted"
+        },
+        {
+          "batch": 7,
+          "changed": 1,
+          "elapsedMs": 2986,
+          "size": 1,
+          "status": "accepted"
+        }
+      ],
+      "utterances": 8,
+      "word_alignment": true,
+      "file": "test1.mp3",
+      "rumble": true,
+      "valid_export": true,
+      "accepted_changes": 3,
+      "text_score": null
+    }
+  ]
+}

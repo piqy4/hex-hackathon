@@ -21,6 +21,8 @@ class Recognition(
     val text: String,
     /** Token start times in seconds from the chunk start; empty when the model gives none (Whisper). */
     val tokenStartsSec: FloatArray,
+    val tokens: Array<String> = emptyArray(),
+    val tokenDurationsSec: FloatArray = floatArrayOf(),
 )
 
 interface SpeechRecognizer {
@@ -147,7 +149,7 @@ class SherpaOfflineRecognizer(
             stream.acceptWaveform(audio.samples.copyOfRange(chunk.startSample, chunk.endSample), audio.sampleRate)
             recognizer.decode(stream)
             val result = recognizer.getResult(stream)
-            return Recognition(result.text, result.timestamps)
+            return Recognition(result.text, result.timestamps, result.tokens, result.durations)
         } finally {
             stream.release()
         }

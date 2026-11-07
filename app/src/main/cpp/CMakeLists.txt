@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.22.1)
 project(hex_llm LANGUAGES C CXX)
+set_property(GLOBAL PROPERTY JOB_POOLS compile_pool=2)
+set(CMAKE_JOB_POOL_COMPILE compile_pool)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(LLAMA_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../../../llama.cpp" CACHE PATH "Pinned llama.cpp checkout")
