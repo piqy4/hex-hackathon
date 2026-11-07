@@ -40,3 +40,6 @@ keystore.properties
 *.apk
 *.aab
 /app/release/
+!/models/manifest.json
+/app/build/
+**/__pycache__/

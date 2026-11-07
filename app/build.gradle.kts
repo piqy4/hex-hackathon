@@ -5,6 +5,7 @@ plugins {
 
 android {
     namespace = "com.hex.stenographer"
+    ndkVersion = "28.2.13676358"
     compileSdk {
         version = release(37)
     }
@@ -15,6 +16,13 @@ android {
         targetSdk = 37
         versionCode = 1
         versionName = "1.0"
+
+        ndk { abiFilters += providers.gradleProperty("llmAbi").getOrElse("arm64-v8a") }
+        externalNativeBuild {
+            cmake {
+                arguments += listOf("-DCMAKE_BUILD_TYPE=Release", "-DANDROID_STL=c++_shared")
+            }
+        }
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -34,9 +42,17 @@ android {
     buildFeatures {
         compose = true
     }
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
+    }
+    androidResources { noCompress += "gguf" }
 }
 
 dependencies {
+    implementation("com.google.code.gson:gson:2.11.0")
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.compose.material3)
