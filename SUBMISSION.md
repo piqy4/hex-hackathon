@@ -1,5 +1,10 @@
 # Комплект для проверки
 
+Сценарий выступления и показа: [DEMO.md](DEMO.md).
+Финальное оформление: стартовый экран, карточки реплик, меню действий, раскрываемые замеры.
+После оформления: 48 JVM-тестов пройдены; assembleRelease -PdemoSigning=true — успешно.
+Алгоритмы и модели сохранены без изменений.
+
 ## Сборка
 JDK из Android Studio, Android SDK 37, NDK 28.2.13676358, CMake 3.22.1.
 `gradlew :app:assembleRelease -PdemoSigning=true`
