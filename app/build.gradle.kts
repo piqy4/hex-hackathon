@@ -223,7 +223,9 @@ val diarizationModels = mapOf(
 )
 
 /** Weights bundled into the APK. File name (as in SHA256SUMS) to source URL. */
-val bundledModels = diarizationModels + asrModels.getValue(asrModel)
+val llmModels = mapOf("qwen2.5-0.5b-instruct-q4_k_m.gguf" to
+    "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/9217f5db79a29953eb74d5343926648285ec7e67/qwen2.5-0.5b-instruct-q4_k_m.gguf")
+val bundledModels = diarizationModels + asrModels.getValue(asrModel) + llmModels
 
 /** Known alternatives that are not bundled, compared by sideloading. */
 val alternativeModels = mapOf(
@@ -232,7 +234,7 @@ val alternativeModels = mapOf(
 )
 
 /** Every known weight, for comparison runs (`./gradlew downloadAllModels`, then adb push). */
-val allModels = diarizationModels + alternativeModels +
+val allModels = diarizationModels + alternativeModels + llmModels +
     asrModels.values.fold(emptyMap<String, String>()) { acc, m -> acc + m }
 
 val sherpaOnnxVersion = "1.13.8"
@@ -245,7 +247,9 @@ val downloadSherpaOnnx = tasks.register<DownloadVerified>("downloadSherpaOnnx") 
 
 val modelDownloads = allModels.mapValues { (name, sourceUrl) ->
     tasks.register<DownloadVerified>("downloadModel-${name.substringBeforeLast('.')}") {
-        url = sourceUrl
+        val cacheDir = providers.gradleProperty("modelCacheDir").orNull
+        val cached = cacheDir?.let { File(it, name) }?.takeIf { it.isFile }
+        url = cached?.toURI()?.toString() ?: sourceUrl
         sha256 = modelChecksums[name] ?: throw GradleException("$name is missing from models/SHA256SUMS")
         destination = rootProject.layout.projectDirectory.file("models/$name")
     }
@@ -282,6 +286,9 @@ val prepareTestAudioAssets = tasks.register<PrepareAssets>("prepareTestAudioAsse
             include("dialogs/*.wav", "dialogs/*.json") // team recordings with export-format references
         },
     )
+    providers.gradleProperty("evalFixtureDir").orNull?.let { fixtureDir ->
+        sources.from(fileTree(fixtureDir) { include("*_synthetic.wav", "*.reference.json") })
+    }
     subdir = "audio"
     writeManifest = false
     manifestOnly = emptyMap()
@@ -292,12 +299,22 @@ val prepareTestAudioAssets = tasks.register<PrepareAssets>("prepareTestAudioAsse
 
 android {
     namespace = "com.hex.stenographer"
+    ndkVersion = "28.2.13676358"
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
+    }
     compileSdk {
         version = release(37)
     }
 
     defaultConfig {
         applicationId = "com.hex.stenographer"
+        externalNativeBuild {
+            cmake { arguments += listOf("-DCMAKE_BUILD_TYPE=Release", "-DANDROID_STL=c++_shared") }
+        }
         minSdk = 26
         targetSdk = 37
         versionCode = 1
@@ -317,9 +334,15 @@ android {
             ndk { abiFilters += "x86_64" }
         }
         release {
+            // Installable hackathon build; production signing remains external.
+            if (providers.gradleProperty("demoSigning").getOrElse("false").toBoolean()) {
+                signingConfig = signingConfigs.getByName("debug")
+            }
+            // Scoped R8 optimization caused IllegalAccessError in ProcessLifecycleInitializer
+            // on Android 13 (Kotlin collection superclass became inaccessible).
+            // Native inference is still compiled in CMake Release.
             optimization {
-                enable = true
-                packageScope = setOf("androidx.**", "kotlin.**", "kotlinx.**")
+                enable = false
             }
         }
     }
@@ -346,6 +369,7 @@ androidComponents {
 }
 
 dependencies {
+    implementation("com.google.code.gson:gson:2.11.0")
     implementation(files(downloadSherpaOnnx.flatMap { it.destination }))
 
     implementation(platform(libs.androidx.compose.bom))

@@ -1,0 +1,34 @@
+{
+  "transcript": [
+    {
+      "speaker_id": "speaker_1",
+      "start_ms": 1010,
+      "end_ms": 2596,
+      "text": "коллеги добрый день"
+    },
+    {
+      "speaker_id": "speaker_1",
+      "start_ms": 3423,
+      "end_ms": 7422,
+      "text": "сегодня обсуждаем план встречи и проверяем запись разговора"
+    },
+    {
+      "speaker_id": "speaker_1",
+      "start_ms": 13869,
+      "end_ms": 14510,
+      "text": "спасибо"
+    },
+    {
+      "speaker_id": "speaker_1",
+      "start_ms": 15387,
+      "end_ms": 17125,
+      "text": "тогда сначала проверим звук"
+    },
+    {
+      "speaker_id": "speaker_1",
+      "start_ms": 17497,
+      "end_ms": 19910,
+      "text": "а потом сохраним расшифровку в файл"
+    }
+  ]
+}

@@ -29,7 +29,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-enum class Stage { PreparingModels, Decoding, Diarization, Recognition }
+enum class Stage { PreparingModels, Decoding, Diarization, Recognition, Polishing }
 
 enum class ProcessingError {
     Unreadable, Unsupported, Corrupted, TooLong, OutOfMemory,
@@ -53,7 +53,7 @@ sealed interface MainUiState {
     data object NoFile : MainUiState
     data class Ready(val file: AudioFileInfo) : MainUiState
     data class Processing(val file: AudioFileInfo, val stage: Stage, val progress: Float?) : MainUiState
-    data class Done(val file: AudioFileInfo, val result: ProcessingResult) : MainUiState
+    data class Done(val file: AudioFileInfo, val result: ProcessingResult, val reprocessing: Int? = null, val fragmentError: String? = null) : MainUiState
     data class Failed(val file: AudioFileInfo?, val error: ProcessingError) : MainUiState
 }
 
@@ -67,6 +67,9 @@ class MainViewModel(
     val state: StateFlow<MainUiState> = _state.asStateFlow()
 
     private var job: Job? = null
+
+    // Kept outside saved-state Bundle: long transcripts can exceed Binder's size limit.
+    var pendingExport: String? = null
 
     init {
         viewModelScope.launch { runCatching { models.prune() } }
@@ -85,6 +88,55 @@ class MainViewModel(
         }
     }
 
+    fun reprocessUtterance(index: Int) {
+        if (job?.isActive == true) return
+        val snapshot = _state.value as? MainUiState.Done ?: return
+        val item = snapshot.result.utterances.getOrNull(index) ?: return
+        job = viewModelScope.launch {
+            _state.value = snapshot.copy(reprocessing = index)
+            try {
+                val audio = importer.decode(snapshot.file.uri) {}
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { audio.normalizeLoudnessInPlace() }
+                val span = com.hex.stenographer.diarization.SpeechSpan(
+                    1, audio.msToSample(item.startMs), audio.msToSample(item.endMs))
+                val chunks = com.hex.stenographer.asr.ChunkPlanner.plan(
+                    audio.samples, audio.sampleRate, listOf(span),
+                    com.hex.stenographer.asr.ChunkingConfig(minChunkMs = 100))
+                val recognitions = SherpaOfflineRecognizer(models).transcribe(audio, chunks)
+                val text = recognitions.mapNotNull { com.hex.stenographer.asr.TranscriptText.clean(it.text) }
+                    .joinToString(" ")
+                check(text.isNotBlank()) { "Речь не найдена; прежний текст сохранён." }
+                val model = models.require("qwen2.5-0.5b-instruct-q4_k_m.gguf").single()
+                val corrected = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                    com.hex.stenographer.llm.SafeTextPolisher(
+                        { com.hex.stenographer.llm.LlamaSession(model) }
+                    ).polish(listOf(item.copy(text = text))).single()
+                }
+                _state.value = snapshot.copy(result = snapshot.result.copy(
+                    utterances = snapshot.result.utterances.mapIndexed { i, old ->
+                        if (i == index) corrected else old
+                    }))
+            } catch (e: CancellationException) {
+                _state.value = snapshot
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "Fragment recognition failed", e)
+                _state.value = snapshot.copy(fragmentError = "Не удалось обработать фрагмент. Прежний текст сохранён.")
+            }
+        }
+    }
+
+    fun editUtterance(index: Int, text: String) {
+        if (text.isBlank() || job?.isActive == true) return
+        _state.update { state ->
+            if (state !is MainUiState.Done || index !in state.result.utterances.indices) state
+            else state.copy(result = state.result.copy(utterances =
+                state.result.utterances.mapIndexed { i, item ->
+                    if (i == index) item.copy(text = text.trim()) else item
+                }))
+        }
+    }
+
     fun process() {
         if (job?.isActive == true) return
         val file = when (val s = _state.value) {
@@ -98,17 +150,18 @@ class MainViewModel(
             val timer = StageTimer(file)
             _state.value = try {
                 timer.start(Stage.PreparingModels)
-                models.require(*engine.requiredModels.toTypedArray()) { timer.progress(Stage.PreparingModels, it) }
+                models.require(*(engine.requiredModels + "qwen2.5-0.5b-instruct-q4_k_m.gguf").toTypedArray()) { timer.progress(Stage.PreparingModels, it) }
 
-                timer.start(Stage.Decoding)
-                val audio = importer.decode(file.uri) { timer.progress(Stage.Decoding, it) }
-                audio.normalizeLoudnessInPlace()
-
-                val utterances = engine.run(audio) { speechStage, fraction ->
-                    val stage = speechStage.toStage()
-                    if (fraction == null) timer.start(stage) else timer.progress(stage, fraction)
+                val (durationMs, utterances) = recognizeFile(file, timer)
+                timer.start(Stage.Polishing)
+                val model = models.require("qwen2.5-0.5b-instruct-q4_k_m.gguf").single()
+                val polished = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                    com.hex.stenographer.llm.SafeTextPolisher(
+                        { com.hex.stenographer.llm.LlamaSession(model) },
+                        { Log.i(TAG, "LLM: $it") },
+                    ).polish(utterances)
                 }
-                MainUiState.Done(file, ProcessingResult(audio.durationMs, utterances, timer.finish()))
+                MainUiState.Done(file, ProcessingResult(durationMs, polished, timer.finish()))
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -116,6 +169,18 @@ class MainViewModel(
                 MainUiState.Failed(file, e.toError())
             }
         }
+    }
+
+    /** PCM stays in this frame and is no longer retained when LLM starts. */
+    private suspend fun recognizeFile(file: AudioFileInfo, timer: StageTimer): Pair<Long, List<Utterance>> {
+        timer.start(Stage.Decoding)
+        val audio = importer.decode(file.uri) { timer.progress(Stage.Decoding, it) }
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { audio.normalizeLoudnessInPlace() }
+        val items = engine.run(audio) { speechStage, fraction ->
+            val stage = speechStage.toStage()
+            if (fraction == null) timer.start(stage) else timer.progress(stage, fraction)
+        }
+        return audio.durationMs to items
     }
 
     /** Publishes stage changes and progress, and measures wall time per stage. */
