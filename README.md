@@ -2,7 +2,7 @@
 
 **Разговор — в текст. На устройстве, без облака.**
 
-[Сценарий демонстрации](DEMO.md) · [Сборка и сдача](SUBMISSION.md) · [Фактические проверки](evidence/README.md)
+[Сборка и запуск](SUBMISSION.md) · [Результаты проверки](evidence/README.md) · [Пример JSON](evidence/offline-ui-export.json)
 
 Офлайн Android-стенографист: GigaAM v3 + pyannote через sherpa-onnx, пунктуация через
 Qwen2.5-0.5B-Instruct Q4_K_M и llama.cpp. JSON через системный диалог, редактирование текста
@@ -21,7 +21,7 @@ cf659f240b232e15700b1721bbb43c1d973c52e9. При отсутствии сосед
 Для повторного использования локальных весов: `-PmodelCacheDir=<папка>`; хеш проверяется и в этом режиме.
 
 Приведённые ниже исторические метрики ASR/диаризации **не включают LLM**.
-Актуальные границы проверки интеграции — [INTEGRATION_STATUS.md](INTEGRATION_STATUS.md).
+Результаты текущей интеграции и границы проверки — [evidence/README.md](evidence/README.md).
 
 ## Сборка
 
